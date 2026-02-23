@@ -8,6 +8,7 @@ import {
   type PlayerWithSurvivors,
   type PendingInvitation,
 } from "@/lib/group-status-actions";
+import { removeMember } from "@/lib/group-actions";
 import SurvivorCard from "@/components/survivor-card";
 
 type PageState =
@@ -50,15 +51,61 @@ function WinnerBanner({ players }: { players: PlayerWithSurvivors[] }) {
   );
 }
 
+/** Two-step remove button: first click arms it, second click confirms. */
+function RemoveButton({ onConfirm }: { onConfirm: () => Promise<void> }) {
+  const [armed, setArmed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function handleConfirm() {
+    setLoading(true);
+    await onConfirm();
+    setLoading(false);
+  }
+
+  if (armed) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <button
+          onClick={handleConfirm}
+          disabled={loading}
+          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50 transition"
+        >
+          {loading ? "Removing…" : "Confirm"}
+        </button>
+        <button
+          onClick={() => setArmed(false)}
+          className="text-xs text-gray-400 hover:text-gray-600 transition"
+        >
+          Cancel
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setArmed(true)}
+      className="text-xs text-gray-400 hover:text-red-500 transition"
+      title="Remove from group"
+    >
+      Remove
+    </button>
+  );
+}
+
 function PlayerCard({
   player,
   showElimination,
+  isAdmin,
+  onRemove,
 }: {
   player: PlayerWithSurvivors;
   showElimination: boolean;
+  isAdmin: boolean;
+  onRemove: (playerId: string) => Promise<void>;
 }) {
   return (
-    <div className="p-4">
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
       {/* Player header */}
       <div className="flex items-center gap-2 mb-3">
         <span className="font-bold text-gray-900">{player.player_name}</span>
@@ -70,6 +117,12 @@ function PlayerCard({
         {showElimination && player.is_eliminated && (
           <span className="text-xs bg-red-100 text-red-700 rounded px-1.5 py-0.5 font-medium">
             Eliminated
+          </span>
+        )}
+        {/* Remove button — admin only, not on the admin row */}
+        {isAdmin && player.role !== "admin" && (
+          <span className="ml-auto">
+            <RemoveButton onConfirm={() => onRemove(player.player_id)} />
           </span>
         )}
       </div>
@@ -103,6 +156,8 @@ export default function GroupPage() {
   const { activeGroup } = useGroup();
   const [state, setState] = useState<PageState>({ mode: "loading" });
 
+  const isAdmin = activeGroup?.role === "admin";
+
   useEffect(() => {
     if (!activeGroup) {
       setState({ mode: "no-group" });
@@ -114,8 +169,6 @@ export default function GroupPage() {
     const status = activeGroup.status;
 
     if (status === "signup" || status === "draft_order_posted") {
-      // We can get draft_scheduled_at from the group context if available,
-      // but we need to fetch to get it — call the action with the group id.
       getGroupStatusData(activeGroup.group_id).then((data) => {
         setState({
           mode: "pre-draft",
@@ -141,6 +194,27 @@ export default function GroupPage() {
       setState({ mode: "no-group" });
     }
   }, [activeGroup]);
+
+  async function handleRemove(playerId: string) {
+    if (!activeGroup) return;
+    await removeMember(activeGroup.group_id, playerId);
+    // Optimistically remove from local state
+    setState((prev) => {
+      if (prev.mode === "pre-draft") {
+        return { ...prev, players: prev.players.filter((p) => p.player_id !== playerId) };
+      }
+      if (prev.mode === "post-draft") {
+        return {
+          ...prev,
+          data: {
+            ...prev.data,
+            players: prev.data.players.filter((p) => p.player_id !== playerId),
+          },
+        };
+      }
+      return prev;
+    });
+  }
 
   // --- Loading ---
   if (state.mode === "loading") {
@@ -181,6 +255,7 @@ export default function GroupPage() {
               <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-3">Player</th>
                 <th className="px-4 py-3">Rankings</th>
+                {isAdmin && <th className="px-4 py-3" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -206,6 +281,13 @@ export default function GroupPage() {
                       <span className="text-amber-500 font-medium">Not yet</span>
                     )}
                   </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-right">
+                      {player.role !== "admin" && (
+                        <RemoveButton onConfirm={() => handleRemove(player.player_id)} />
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {state.pendingInvitations.map((invite) => (
@@ -216,6 +298,7 @@ export default function GroupPage() {
                       Invite pending
                     </span>
                   </td>
+                  {isAdmin && <td className="px-4 py-3" />}
                 </tr>
               ))}
             </tbody>
@@ -230,7 +313,6 @@ export default function GroupPage() {
   const showElimination = data.status === "in_progress" || data.status === "complete";
   const isComplete = data.status === "complete";
 
-  // Sort: active players first, eliminated last
   const sortedPlayers = [...data.players].sort((a, b) => {
     if (a.is_eliminated === b.is_eliminated) {
       return a.player_name.localeCompare(b.player_name);
@@ -250,6 +332,8 @@ export default function GroupPage() {
             key={player.player_id}
             player={player}
             showElimination={showElimination}
+            isAdmin={isAdmin}
+            onRemove={handleRemove}
           />
         ))}
       </div>

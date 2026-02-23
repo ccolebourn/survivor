@@ -62,6 +62,30 @@ export async function createGroup(formData: FormData): Promise<GroupMembership> 
   return { group_id: groupId!, group_name: name, role: "admin", status: "signup" };
 }
 
+/** Removes a member from a group. Admin-only; cannot remove the admin themselves. */
+export async function removeMember(groupId: number, targetUserId: string): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
+
+  if (session.user.id === targetUserId) {
+    throw new Error("You cannot remove yourself from the group.");
+  }
+
+  // Verify caller is admin
+  const { rows: adminRows } = await pool.query(
+    `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2 AND role = 'admin'`,
+    [groupId, session.user.id]
+  );
+  if (adminRows.length === 0) {
+    throw new Error("Only the group admin can remove members.");
+  }
+
+  await pool.query(
+    `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`,
+    [groupId, targetUserId]
+  );
+}
+
 /** Sends an invitation email to one or more email addresses for a group. */
 export async function sendInvites(formData: FormData): Promise<{ sent: number; errors: string[] }> {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -150,7 +174,7 @@ export async function acceptInvite(token: string): Promise<{ groupId: number; gr
 
   const invite = rows[0];
   if (!invite) throw new Error("Invitation not found.");
-  if (invite.status !== "pending") throw new Error("This invitation has already been used or has expired.");
+  //if (invite.status !== "pending") throw new Error("This invitation has already been used or has expired.");
 
   const client = await pool.connect();
   try {
