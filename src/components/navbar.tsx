@@ -71,6 +71,9 @@ export default function NavBar() {
             <Link href="/draft" className="hover:text-blue-600 transition">
               Draft
             </Link>
+            <Link href="/rules" className="hover:text-blue-600 transition">
+              Rules
+            </Link>
             {activeGroup.role === "admin" && (
               <Link
                 href={`/groups/${activeGroup.group_id}/invite`}
@@ -228,6 +231,13 @@ export default function NavBar() {
             className="px-2 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition"
           >
             Draft
+          </Link>
+          <Link
+            href="/rules"
+            onClick={() => setMobileOpen(false)}
+            className="px-2 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition"
+          >
+            Rules
           </Link>
           {activeGroup.role === "admin" && (
             <Link
