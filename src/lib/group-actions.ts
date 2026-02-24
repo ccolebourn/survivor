@@ -162,6 +162,30 @@ export async function sendInvites(formData: FormData): Promise<{ sent: number; e
   return { sent, errors };
 }
 
+/** Cancels a pending invitation. Admin-only. */
+export async function cancelInvite(inviteId: number): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
+
+  // Fetch the invite to know which group it belongs to
+  const { rows: inviteRows } = await pool.query<{ group_id: number }>(
+    `SELECT group_id FROM invitations WHERE id = $1 AND status = 'pending'`,
+    [inviteId]
+  );
+  if (inviteRows.length === 0) throw new Error("Invitation not found or already resolved.");
+
+  const groupId = inviteRows[0].group_id;
+
+  // Verify caller is admin of that group
+  const { rows: adminRows } = await pool.query(
+    `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2 AND role = 'admin'`,
+    [groupId, session.user.id]
+  );
+  if (adminRows.length === 0) throw new Error("Only the group admin can cancel invitations.");
+
+  await pool.query(`DELETE FROM invitations WHERE id = $1`, [inviteId]);
+}
+
 /** Accepts an invitation by token and adds the user to the group. */
 export async function acceptInvite(token: string): Promise<{ groupId: number; groupName: string }> {
   const session = await auth.api.getSession({ headers: await headers() });

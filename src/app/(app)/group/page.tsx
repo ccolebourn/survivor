@@ -8,7 +8,7 @@ import {
   type PlayerWithSurvivors,
   type PendingInvitation,
 } from "@/lib/group-status-actions";
-import { removeMember } from "@/lib/group-actions";
+import { removeMember, cancelInvite } from "@/lib/group-actions";
 import SurvivorCard from "@/components/survivor-card";
 
 type PageState =
@@ -195,6 +195,16 @@ export default function GroupPage() {
     }
   }, [activeGroup]);
 
+  async function handleCancelInvite(inviteId: number) {
+    await cancelInvite(inviteId);
+    setState((prev) => {
+      if (prev.mode === "pre-draft") {
+        return { ...prev, pendingInvitations: prev.pendingInvitations.filter((i) => i.id !== inviteId) };
+      }
+      return prev;
+    });
+  }
+
   async function handleRemove(playerId: string) {
     if (!activeGroup) return;
     await removeMember(activeGroup.group_id, playerId);
@@ -298,7 +308,11 @@ export default function GroupPage() {
                       Invite pending
                     </span>
                   </td>
-                  {isAdmin && <td className="px-4 py-3" />}
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-right">
+                      <RemoveButton onConfirm={() => handleCancelInvite(invite.id)} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
