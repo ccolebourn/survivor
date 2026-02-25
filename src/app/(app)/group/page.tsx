@@ -8,7 +8,7 @@ import {
   type PlayerWithSurvivors,
   type PendingInvitation,
 } from "@/lib/group-status-actions";
-import { removeMember, cancelInvite } from "@/lib/group-actions";
+import { removeMember, cancelInvite, optInMember } from "@/lib/group-actions";
 import SurvivorCard from "@/components/survivor-card";
 
 type PageState =
@@ -90,6 +90,38 @@ function RemoveButton({ onConfirm }: { onConfirm: () => Promise<void> }) {
     >
       Remove
     </button>
+  );
+}
+
+/** Single-click opt-in button with loading state. */
+function OptInButton({ onConfirm }: { onConfirm: () => Promise<void> }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setLoading(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to opt in.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <span className="flex flex-col items-end gap-0.5">
+      <button
+        onClick={handleClick}
+        disabled={loading}
+        className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50 transition font-medium"
+        title="Opt this user into the group"
+      >
+        {loading ? "Adding…" : "Opt In"}
+      </button>
+      {error && <span className="text-xs text-red-500">{error}</span>}
+    </span>
   );
 }
 
@@ -205,6 +237,28 @@ export default function GroupPage() {
     });
   }
 
+  async function handleOptIn(inviteId: number) {
+    const result = await optInMember(inviteId);
+    setState((prev) => {
+      if (prev.mode !== "pre-draft") return prev;
+      return {
+        ...prev,
+        pendingInvitations: prev.pendingInvitations.filter((i) => i.id !== inviteId),
+        players: [
+          ...prev.players,
+          {
+            player_id: result.userId,
+            player_name: result.userName,
+            role: "player",
+            has_ranked: false,
+            survivors: [],
+            is_eliminated: false,
+          },
+        ],
+      };
+    });
+  }
+
   async function handleRemove(playerId: string) {
     if (!activeGroup) return;
     await removeMember(activeGroup.group_id, playerId);
@@ -310,7 +364,10 @@ export default function GroupPage() {
                   </td>
                   {isAdmin && (
                     <td className="px-4 py-3 text-right">
-                      <RemoveButton onConfirm={() => handleCancelInvite(invite.id)} />
+                      <span className="flex items-center justify-end gap-3">
+                        <OptInButton onConfirm={() => handleOptIn(invite.id)} />
+                        <RemoveButton onConfirm={() => handleCancelInvite(invite.id)} />
+                      </span>
                     </td>
                   )}
                 </tr>

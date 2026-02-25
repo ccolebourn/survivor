@@ -186,6 +186,65 @@ export async function cancelInvite(inviteId: number): Promise<void> {
   await pool.query(`DELETE FROM invitations WHERE id = $1`, [inviteId]);
 }
 
+/** Admin opts a pending invitee into the group without them accepting. The user must already have an account. */
+export async function optInMember(inviteId: number): Promise<{ userId: string; userName: string }> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
+
+  // Fetch the invite
+  const { rows: inviteRows } = await pool.query<{ group_id: number; email: string }>(
+    `SELECT group_id, email FROM invitations WHERE id = $1 AND status = 'pending'`,
+    [inviteId]
+  );
+  if (inviteRows.length === 0) throw new Error("Invitation not found or already resolved.");
+
+  const { group_id: groupId, email } = inviteRows[0];
+
+  // Verify caller is admin
+  const { rows: adminRows } = await pool.query(
+    `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2 AND role = 'admin'`,
+    [groupId, session.user.id]
+  );
+  if (adminRows.length === 0) throw new Error("Only the group admin can opt in members.");
+
+  // Find the user by email — they must have an account
+  const { rows: userRows } = await pool.query<{ id: string; name: string }>(
+    `SELECT id, name FROM "user" WHERE email = $1`,
+    [email]
+  );
+  if (userRows.length === 0) {
+    throw new Error("No account found for this email. The user must sign up before they can be opted in.");
+  }
+
+  const user = userRows[0];
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `INSERT INTO group_members (group_id, user_id, role)
+       VALUES ($1, $2, 'player')
+       ON CONFLICT (group_id, user_id) DO NOTHING`,
+      [groupId, user.id]
+    );
+
+    await client.query(
+      `UPDATE invitations SET status = 'accepted' WHERE id = $1`,
+      [inviteId]
+    );
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  return { userId: user.id, userName: user.name };
+}
+
 /** Accepts an invitation by token and adds the user to the group. */
 export async function acceptInvite(token: string): Promise<{ groupId: number; groupName: string }> {
   const session = await auth.api.getSession({ headers: await headers() });
