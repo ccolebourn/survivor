@@ -15,6 +15,7 @@ export interface PlayerWithSurvivors {
 export interface PendingInvitation {
   id: number;
   email: string;
+  has_account: boolean;
 }
 
 export interface GroupStatusData {
@@ -24,6 +25,7 @@ export interface GroupStatusData {
   draft_scheduled_at: string | null;
   players: PlayerWithSurvivors[];
   pendingInvitations: PendingInvitation[];
+  undraftedSurvivors: Survivor[];
 }
 
 interface QueryRow {
@@ -130,7 +132,21 @@ export async function getGroupStatusData(groupId: number): Promise<GroupStatusDa
   }
 
   const { rows: inviteRows } = await pool.query<PendingInvitation>(
-    `SELECT id, email FROM invitations WHERE group_id = $1 AND status = 'pending' ORDER BY email`,
+    `SELECT i.id, i.email, (u.id IS NOT NULL) AS has_account
+     FROM invitations i
+     LEFT JOIN "user" u ON lower(u.email) = i.email
+     WHERE i.group_id = $1 AND i.status = 'pending'
+     ORDER BY i.email`,
+    [groupId]
+  );
+
+  const { rows: undraftedRows } = await pool.query<Survivor>(
+    `SELECT s.id, s.season, s.name, s.age, s.home_town, s.previous_seasons, s.image_path, s.week_eliminated, s.eliminated_at
+     FROM survivors s
+     WHERE s.id NOT IN (
+       SELECT survivor_id FROM drafted WHERE group_id = $1
+     )
+     ORDER BY s.name`,
     [groupId]
   );
 
@@ -141,5 +157,6 @@ export async function getGroupStatusData(groupId: number): Promise<GroupStatusDa
     draft_scheduled_at: firstRow.draft_scheduled_at,
     players: Array.from(playerMap.values()),
     pendingInvitations: inviteRows,
+    undraftedSurvivors: undraftedRows,
   };
 }

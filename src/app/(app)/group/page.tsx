@@ -365,7 +365,13 @@ export default function GroupPage() {
                   {isAdmin && (
                     <td className="px-4 py-3 text-right">
                       <span className="flex items-center justify-end gap-3">
-                        <OptInButton onConfirm={() => handleOptIn(invite.id)} />
+                        {invite.has_account ? (
+                          <OptInButton onConfirm={() => handleOptIn(invite.id)} />
+                        ) : (
+                          <span className="text-xs text-gray-300" title="User must create an account before they can be opted in">
+                            Opt In
+                          </span>
+                        )}
                         <RemoveButton onConfirm={() => handleCancelInvite(invite.id)} />
                       </span>
                     </td>
@@ -408,6 +414,25 @@ export default function GroupPage() {
           />
         ))}
       </div>
+
+      {data.undraftedSurvivors.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-gray-700 mb-3">
+            Un-drafted Survivors ({data.undraftedSurvivors.length})
+          </h2>
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {data.undraftedSurvivors.map((survivor) => (
+                <SurvivorCard
+                  key={survivor.id}
+                  survivor={survivor}
+                  eliminated={showElimination && survivor.week_eliminated != null}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

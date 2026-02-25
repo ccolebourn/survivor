@@ -207,7 +207,7 @@ export async function optInMember(inviteId: number): Promise<{ userId: string; u
   );
   if (adminRows.length === 0) throw new Error("Only the group admin can opt in members.");
 
-  // Find the user by email — they must have an account
+  // Find the user by email, they must have an account
   const { rows: userRows } = await pool.query<{ id: string; name: string }>(
     `SELECT id, name FROM "user" WHERE email = $1`,
     [email]
