@@ -9,7 +9,9 @@ import {
   type PendingInvitation,
 } from "@/lib/group-status-actions";
 import { removeMember, cancelInvite, optInMember } from "@/lib/group-actions";
+import { adminClaimFreeAgent } from "@/lib/free-agent-actions";
 import SurvivorCard from "@/components/survivor-card";
+import FreeAgentPickerModal from "@/components/free-agent-picker-modal";
 
 type PageState =
   | { mode: "loading" }
@@ -130,11 +132,15 @@ function PlayerCard({
   showElimination,
   isAdmin,
   onRemove,
+  freeAgentEligible,
+  onAssignFreeAgent,
 }: {
   player: PlayerWithSurvivors;
   showElimination: boolean;
   isAdmin: boolean;
   onRemove: (playerId: string) => Promise<void>;
+  freeAgentEligible?: boolean;
+  onAssignFreeAgent?: () => void;
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -158,6 +164,16 @@ function PlayerCard({
           </span>
         )}
       </div>
+
+      {/* Free agent assignment button for admin */}
+      {isAdmin && freeAgentEligible && onAssignFreeAgent && (
+        <button
+          onClick={onAssignFreeAgent}
+          className="mb-3 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition"
+        >
+          Assign Free Agent
+        </button>
+      )}
 
       {/* Survivors grid */}
       {player.survivors.length === 0 ? (
@@ -187,6 +203,8 @@ function PlayerCard({
 export default function GroupPage() {
   const { activeGroup } = useGroup();
   const [state, setState] = useState<PageState>({ mode: "loading" });
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [assignTarget, setAssignTarget] = useState<{ playerId: string; playerName: string } | null>(null);
 
   const isAdmin = activeGroup?.role === "admin";
 
@@ -225,7 +243,7 @@ export default function GroupPage() {
     } else {
       setState({ mode: "no-group" });
     }
-  }, [activeGroup]);
+  }, [activeGroup, refreshKey]);
 
   async function handleCancelInvite(inviteId: number) {
     await cancelInvite(inviteId);
@@ -389,6 +407,29 @@ export default function GroupPage() {
   const { data } = state;
   const showElimination = data.status === "in_progress" || data.status === "complete";
   const isComplete = data.status === "complete";
+  const isInProgress = data.status === "in_progress";
+
+  // Compute per-player free agent eligibility (client-side from existing data)
+  const undraftedAlive = data.undraftedSurvivors.filter((s) => s.week_eliminated == null);
+  const hasUndraftedAvailable = undraftedAlive.length > 0;
+
+  function isPlayerFreeAgentEligible(player: PlayerWithSurvivors): boolean {
+    if (!isInProgress || !hasUndraftedAvailable) return false;
+    const eliminatedCount = player.survivors.filter((s) => s.week_eliminated != null).length;
+    const aliveCount = player.survivors.filter((s) => s.week_eliminated == null).length;
+    const freeAgentPicksMade = player.survivors.filter((s) => s.is_free_agent_pick).length;
+    return eliminatedCount > 0 && aliveCount > 0 && eliminatedCount - freeAgentPicksMade > 0;
+  }
+
+  async function handleAdminFreeAgentPick(playerId: string, survivorId: number) {
+    if (!activeGroup) return;
+    const result = await adminClaimFreeAgent(activeGroup.group_id, playerId, survivorId);
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to assign free agent");
+    }
+    setAssignTarget(null);
+    setRefreshKey((k) => k + 1);
+  }
 
   const sortedPlayers = [...data.players].sort((a, b) => {
     if (a.is_eliminated === b.is_eliminated) {
@@ -411,6 +452,8 @@ export default function GroupPage() {
             showElimination={showElimination}
             isAdmin={isAdmin}
             onRemove={handleRemove}
+            freeAgentEligible={isAdmin && isPlayerFreeAgentEligible(player)}
+            onAssignFreeAgent={() => setAssignTarget({ playerId: player.player_id, playerName: player.player_name })}
           />
         ))}
       </div>
@@ -432,6 +475,15 @@ export default function GroupPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {assignTarget && (
+        <FreeAgentPickerModal
+          undraftedSurvivors={undraftedAlive}
+          onPick={(survivorId) => handleAdminFreeAgentPick(assignTarget.playerId, survivorId)}
+          onClose={() => setAssignTarget(null)}
+          playerName={assignTarget.playerName}
+        />
       )}
     </div>
   );

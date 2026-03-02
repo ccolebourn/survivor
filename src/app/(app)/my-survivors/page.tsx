@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { useGroup } from "@/lib/group-context";
 import { getUserRankings, getDraftedSurvivors } from "@/lib/survivor-actions";
+import { getFreeAgentEligibility } from "@/lib/free-agent-actions";
 import RankingUI from "./ranking-ui";
 import DraftedView from "./drafted-view";
 import type { RankedSurvivor, DraftedSurvivor } from "@/lib/survivor-actions";
+import type { FreeAgentEligibility } from "@/lib/free-agent-actions";
 import type { GroupStatus } from "@/lib/types";
 
 type PageState =
@@ -13,11 +15,12 @@ type PageState =
   | { mode: "no-group" }
   | { mode: "ranking"; rankings: RankedSurvivor[]; groupId: number }
   | { mode: "draft-pending"; groupId: number }
-  | { mode: "drafted"; survivors: DraftedSurvivor[]; status: GroupStatus };
+  | { mode: "drafted"; survivors: DraftedSurvivor[]; status: GroupStatus; groupId: number; eligibility: FreeAgentEligibility };
 
 export default function MySurvivorsPage() {
   const { activeGroup } = useGroup();
   const [state, setState] = useState<PageState>({ mode: "loading" });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!activeGroup) {
@@ -35,14 +38,17 @@ export default function MySurvivorsPage() {
         setState({ mode: "ranking", rankings, groupId: activeGroup.group_id });
       });
     } else if (status === "draft_complete" || status === "in_progress" || status === "complete") {
-      // Show drafted survivors
-      getDraftedSurvivors(activeGroup.group_id).then((survivors) => {
-        setState({ mode: "drafted", survivors, status });
+      // Show drafted survivors + free agent eligibility
+      Promise.all([
+        getDraftedSurvivors(activeGroup.group_id),
+        getFreeAgentEligibility(activeGroup.group_id),
+      ]).then(([survivors, eligibility]) => {
+        setState({ mode: "drafted", survivors, status, groupId: activeGroup.group_id, eligibility });
       });
     } else {
       setState({ mode: "no-group" });
     }
-  }, [activeGroup]);
+  }, [activeGroup, refreshKey]);
 
   if (state.mode === "loading") {
     return (
@@ -81,6 +87,9 @@ export default function MySurvivorsPage() {
       <DraftedView
         survivors={state.survivors}
         gameInProgress={state.status === "in_progress" || state.status === "complete"}
+        eligibility={state.eligibility}
+        groupId={state.groupId}
+        onPickComplete={() => setRefreshKey((k) => k + 1)}
       />
     );
   }
