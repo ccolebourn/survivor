@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useGroup } from "@/lib/group-context";
 import { signOut, useSession } from "@/lib/auth-client";
 import type { GroupMembership } from "@/lib/types";
+import { CURRENT_SEASON } from "@/lib/constants";
 
 const STATUS_LABEL: Record<string, string> = {
   signup: "Sign-up",
@@ -56,7 +57,7 @@ export default function NavBar() {
       <nav className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-4">
         {/* Logo */}
         <Link href="/" className="font-bold text-blue-600 tracking-tight text-lg shrink-0">
-          Survivor 50
+          Survivor {CURRENT_SEASON}
         </Link>
 
         {/* Desktop nav links */}

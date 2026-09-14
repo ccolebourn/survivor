@@ -1,4 +1,5 @@
-// Draft algorithms for the Survivor 50 fantasy draft game
+// Draft algorithms for the Survivor fantasy draft game.
+// Season-agnostic: castaway and player counts come from the caller.
 
 export interface DraftOrderEntry {
   player_id: string;

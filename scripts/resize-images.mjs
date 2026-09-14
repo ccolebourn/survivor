@@ -5,7 +5,12 @@
  * resized to 400px wide (maintaining aspect ratio) at 80% quality.
  * Fixes files that were downloaded as WebP but saved with a .jpg extension.
  *
- * Usage: node scripts/resize-images.mjs
+ * Takes an optional subdirectory of public/survivors/ so per-season folders can
+ * be resized without touching earlier seasons. readdirSync is not recursive, so
+ * without the argument the s51/ subfolder is skipped entirely.
+ *
+ * Usage: node scripts/resize-images.mjs          (season 50, flat)
+ *        node scripts/resize-images.mjs s51      (season 51)
  */
 
 import { createRequire } from 'module';
@@ -16,8 +21,15 @@ import { fileURLToPath } from 'url';
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
 
+// Each file is read and written back in place. On Windows sharp keeps the input
+// file mapped while cached, so the write-back fails with an opaque
+// "UNKNOWN: unknown error, open ..." for every image. Disabling the cache
+// releases the handle before writeFileSync runs.
+sharp.cache(false);
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const IMAGE_DIR = path.resolve(__dirname, '..', 'public', 'survivors');
+const SUBDIR = process.argv[2] ?? '';
+const IMAGE_DIR = path.resolve(__dirname, '..', 'public', 'survivors', SUBDIR);
 
 async function main() {
   const files = fs.readdirSync(IMAGE_DIR).filter((f) => /\.(jpg|jpeg|webp|png)$/i.test(f));

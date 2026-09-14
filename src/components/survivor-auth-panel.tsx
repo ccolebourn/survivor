@@ -2,6 +2,8 @@
 
 // Shared Survivor-themed left panel used on the login and sign-up pages.
 
+import { CURRENT_SEASON } from "@/lib/constants";
+
 const STARS = [
   { x: 32,  y: 22,  r: 1.1, cls: "star-0" },
   { x: 88,  y: 14,  r: 0.8, cls: "star-1" },
@@ -143,7 +145,7 @@ export function SurvivorAuthPanel() {
       {/* Text overlay */}
       <div className="absolute inset-0 flex flex-col justify-between px-10 py-10 z-10">
         <span className="text-xs font-bold tracking-[0.3em] text-orange-400 uppercase">
-          Season 50 · Fantasy Draft
+          Season {CURRENT_SEASON} &middot; Fantasy Draft
         </span>
 
         <div className="text-center">
@@ -242,7 +244,7 @@ export function SurvivorMobileHeader() {
     <div className="lg:hidden text-center mb-8">
       <h1 className="text-4xl font-black tracking-tight text-gray-900">SURVIVOR</h1>
       <p className="text-sm text-orange-500 font-bold tracking-widest uppercase mt-1">
-        Fantasy Draft · Season 50
+        Fantasy Draft &middot; Season {CURRENT_SEASON}
       </p>
     </div>
   );

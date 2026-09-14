@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import SurvivorCard from "@/components/survivor-card";
 import {
   getSurvivors,
+  getAvailableSeasons,
   eliminateSurvivor,
   reinstateSurvivor,
 } from "@/lib/admin-actions";
+import { CURRENT_SEASON } from "@/lib/constants";
 import type { Survivor } from "@/lib/types";
 
 export default function AdminSurvivorsPage() {
@@ -14,14 +16,19 @@ export default function AdminSurvivorsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // This page is the one survivor view that is not group-scoped, so it needs
+  // its own season picker. Everywhere else the active group implies the season.
+  const [season, setSeason] = useState<number>(CURRENT_SEASON);
+  const [seasons, setSeasons] = useState<number[]>([CURRENT_SEASON]);
+
   // Track which survivor has the eliminate form open
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [weekInput, setWeekInput] = useState<string>("");
   const [actionLoading, setActionLoading] = useState(false);
 
-  async function load() {
+  async function load(forSeason: number) {
     try {
-      const data = await getSurvivors();
+      const data = await getSurvivors(forSeason);
       setSurvivors(data);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load survivors");
@@ -31,8 +38,20 @@ export default function AdminSurvivorsPage() {
   }
 
   useEffect(() => {
-    load();
+    getAvailableSeasons()
+      .then((s) => {
+        if (s.length > 0) setSeasons(s);
+      })
+      .catch(() => {
+        // Non-fatal: fall back to just the current season in the picker.
+      });
   }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    setExpandedId(null);
+    load(season);
+  }, [season]);
 
   async function handleEliminate(survivorId: number) {
     const week = parseInt(weekInput, 10);
@@ -46,7 +65,7 @@ export default function AdminSurvivorsPage() {
       await eliminateSurvivor(survivorId, week);
       setExpandedId(null);
       setWeekInput("");
-      await load();
+      await load(season);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to eliminate survivor");
     } finally {
@@ -59,7 +78,7 @@ export default function AdminSurvivorsPage() {
     setError(null);
     try {
       await reinstateSurvivor(survivorId);
-      await load();
+      await load(season);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to reinstate survivor");
     } finally {
@@ -91,12 +110,38 @@ export default function AdminSurvivorsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Manage Survivors</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Mark survivors as eliminated each week.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Manage Survivors</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Mark survivors as eliminated each week.
+          </p>
+        </div>
+        {seasons.length > 1 && (
+          <label className="shrink-0 text-sm text-gray-600">
+            <span className="sr-only">Season</span>
+            <select
+              value={season}
+              onChange={(e) => setSeason(Number(e.target.value))}
+              disabled={actionLoading}
+              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
+            >
+              {seasons.map((s) => (
+                <option key={s} value={s}>
+                  Season {s}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
+
+      {season !== CURRENT_SEASON && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          Viewing season {season}, which is not the current season. Changes here
+          affect a finished game.
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">

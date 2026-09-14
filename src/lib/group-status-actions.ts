@@ -22,6 +22,7 @@ export interface GroupStatusData {
   group_id: number;
   group_name: string;
   status: GroupStatus;
+  season: number;
   draft_scheduled_at: string | null;
   players: PlayerWithSurvivors[];
   pendingInvitations: PendingInvitation[];
@@ -48,6 +49,7 @@ interface QueryRow {
   week_eliminated: number | null;
   eliminated_at: string | null;
   season: number | null;
+  group_season: number;
 }
 
 export async function getGroupStatusData(groupId: number): Promise<GroupStatusData | null> {
@@ -71,7 +73,8 @@ export async function getGroupStatusData(groupId: number): Promise<GroupStatusDa
       s.image_path,
       s.week_eliminated,
       s.eliminated_at,
-      s.season
+      s.season,
+      g.season as group_season
     FROM group_members gm
     JOIN "user" u ON u.id = gm.user_id
     JOIN groups g ON g.id = gm.group_id
@@ -110,7 +113,7 @@ export async function getGroupStatusData(groupId: number): Promise<GroupStatusDa
     if (row.survivor_id != null) {
       player.survivors.push({
         id: row.survivor_id,
-        season: row.season ?? 50,
+        season: row.season ?? row.group_season,
         name: row.survivor_name ?? "",
         age: row.age,
         home_town: row.home_town,
@@ -143,9 +146,10 @@ export async function getGroupStatusData(groupId: number): Promise<GroupStatusDa
   const { rows: undraftedRows } = await pool.query<Survivor>(
     `SELECT s.id, s.season, s.name, s.age, s.home_town, s.previous_seasons, s.image_path, s.week_eliminated, s.eliminated_at
      FROM survivors s
-     WHERE s.id NOT IN (
-       SELECT survivor_id FROM drafted WHERE group_id = $1
-     )
+     WHERE s.season = (SELECT season FROM groups WHERE id = $1)
+       AND s.id NOT IN (
+         SELECT survivor_id FROM drafted WHERE group_id = $1
+       )
      ORDER BY s.name`,
     [groupId]
   );
@@ -154,6 +158,7 @@ export async function getGroupStatusData(groupId: number): Promise<GroupStatusDa
     group_id: firstRow.group_id,
     group_name: firstRow.group_name,
     status: firstRow.group_status,
+    season: firstRow.group_season,
     draft_scheduled_at: firstRow.draft_scheduled_at,
     players: Array.from(playerMap.values()),
     pendingInvitations: inviteRows,

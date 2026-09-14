@@ -1,3 +1,5 @@
+import { CURRENT_SEASON } from "@/lib/constants";
+
 interface SendEmailParams {
   to: string;
   subject: string;
@@ -23,7 +25,7 @@ export async function sendEmail({ to, subject, htmlContent }: SendEmailParams): 
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      sender: { email: from, name: "Survivor 50 Draft" },
+      sender: { email: from, name: `Survivor ${CURRENT_SEASON} Draft` },
       to: [{ email: to }],
       subject,
       htmlContent,
@@ -44,7 +46,7 @@ export function buildInviteEmail(params: {
   const { groupName, inviterName, inviteUrl } = params;
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color: #1d4ed8;">You've been invited to join a Survivor 50 draft group!</h2>
+      <h2 style="color: #1d4ed8;">You've been invited to join a Survivor ${CURRENT_SEASON} draft group!</h2>
       <p><strong>${inviterName}</strong> has invited you to join <strong>${groupName}</strong>.</p>
       <p>Click the button below to accept the invitation and join the group:</p>
       <a href="${inviteUrl}"

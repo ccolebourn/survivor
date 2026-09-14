@@ -199,10 +199,11 @@ export async function runDraft(groupId: number): Promise<void> {
       playerRankings[player_id] = rankRows.map((r) => r.survivor_id);
     }
 
-    // Get all season 50 survivor IDs (include all, even eliminated — draft happened before game started)
+    // Get all survivor IDs for this group's season (include all, even
+    // eliminated - the draft happened before the game started)
     const { rows: survivorRows } = await client.query<{ id: number }>(
-      `SELECT id FROM survivors WHERE season = 50`,
-      []
+      `SELECT id FROM survivors WHERE season = (SELECT season FROM groups WHERE id = $1)`,
+      [groupId]
     );
     const availableSurvivorIds = survivorRows.map((r) => r.id);
 

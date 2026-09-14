@@ -14,6 +14,7 @@ export interface Group {
   name: string;
   admin_user_id: string;
   status: GroupStatus;
+  season: number;
   draft_scheduled_at: string | null;
   created_at: string;
 }
@@ -23,6 +24,7 @@ export interface GroupMembership {
   group_name: string;
   role: MemberRole;
   status: GroupStatus;
+  season: number;
 }
 
 export interface Survivor {

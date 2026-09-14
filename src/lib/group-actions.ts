@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { sendEmail, buildInviteEmail } from "@/lib/email";
 import type { GroupMembership } from "@/lib/types";
+import { CURRENT_SEASON } from "@/lib/constants";
 
 /** Returns all groups the current user belongs to. */
 export async function getUserGroups(): Promise<GroupMembership[]> {
@@ -13,11 +14,11 @@ export async function getUserGroups(): Promise<GroupMembership[]> {
   if (!session) return [];
 
   const { rows } = await pool.query<GroupMembership>(
-    `SELECT gm.group_id, g.name AS group_name, gm.role, g.status
+    `SELECT gm.group_id, g.name AS group_name, gm.role, g.status, g.season
      FROM group_members gm
      JOIN groups g ON g.id = gm.group_id
      WHERE gm.user_id = $1
-     ORDER BY g.name`,
+     ORDER BY g.season DESC, g.name`,
     [session.user.id]
   );
 
@@ -37,11 +38,14 @@ export async function createGroup(formData: FormData): Promise<GroupMembership> 
   try {
     await client.query("BEGIN");
 
+    // Season is always CURRENT_SEASON. The groups.season default was dropped in
+    // migration 006 so this has to be explicit; past seasons stay readable but
+    // cannot take new groups.
     const { rows } = await client.query<{ id: number }>(
-      `INSERT INTO groups (name, admin_user_id, status)
-       VALUES ($1, $2, 'signup')
+      `INSERT INTO groups (name, admin_user_id, status, season)
+       VALUES ($1, $2, 'signup', $3)
        RETURNING id`,
-      [name, session.user.id]
+      [name, session.user.id, CURRENT_SEASON]
     );
     groupId = rows[0].id;
 
@@ -59,7 +63,13 @@ export async function createGroup(formData: FormData): Promise<GroupMembership> 
     client.release();
   }
 
-  return { group_id: groupId!, group_name: name, role: "admin", status: "signup" };
+  return {
+    group_id: groupId!,
+    group_name: name,
+    role: "admin",
+    status: "signup",
+    season: CURRENT_SEASON,
+  };
 }
 
 /** Removes a member from a group. Admin-only; cannot remove the admin themselves. */
@@ -145,7 +155,7 @@ export async function sendInvites(formData: FormData): Promise<{ sent: number; e
       const inviteUrl = `${appUrl}/invite/${token}`;
       await sendEmail({
         to: email,
-        subject: `You're invited to join the "${groupName}" Survivor 50 draft`,
+        subject: `You're invited to join the "${groupName}" Survivor ${CURRENT_SEASON} draft`,
         htmlContent: buildInviteEmail({
           groupName,
           inviterName: session.user.name,

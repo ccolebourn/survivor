@@ -78,7 +78,7 @@ export async function getFreeAgentEligibility(
   const { rows: undrafted } = await pool.query<Survivor>(
     `SELECT s.*
      FROM survivors s
-     WHERE s.season = 50
+     WHERE s.season = (SELECT season FROM groups WHERE id = $1)
        AND s.week_eliminated IS NULL
        AND s.id NOT IN (SELECT survivor_id FROM drafted WHERE group_id = $1)
      ORDER BY s.name`,
@@ -167,10 +167,13 @@ export async function claimFreeAgent(
       return { success: false, error: "No free agent picks available" };
     }
 
-    // Verify survivor is not eliminated
+    // Verify the survivor exists, belongs to this group's season, and is not
+    // eliminated. survivorId comes from the client, so the season check is what
+    // stops a group claiming a castaway from a different season.
     const { rows: survivorRows } = await client.query<{ week_eliminated: number | null }>(
-      `SELECT week_eliminated FROM survivors WHERE id = $1`,
-      [survivorId]
+      `SELECT week_eliminated FROM survivors
+       WHERE id = $1 AND season = (SELECT season FROM groups WHERE id = $2)`,
+      [survivorId, groupId]
     );
     if (survivorRows.length === 0) {
       await client.query("ROLLBACK");
@@ -286,10 +289,13 @@ export async function adminClaimFreeAgent(
       return { success: false, error: "No free agent picks available for this player" };
     }
 
-    // Verify survivor is not eliminated
+    // Verify the survivor exists, belongs to this group's season, and is not
+    // eliminated. survivorId comes from the client, so the season check is what
+    // stops a group claiming a castaway from a different season.
     const { rows: survivorRows } = await client.query<{ week_eliminated: number | null }>(
-      `SELECT week_eliminated FROM survivors WHERE id = $1`,
-      [survivorId]
+      `SELECT week_eliminated FROM survivors
+       WHERE id = $1 AND season = (SELECT season FROM groups WHERE id = $2)`,
+      [survivorId, groupId]
     );
     if (survivorRows.length === 0) {
       await client.query("ROLLBACK");

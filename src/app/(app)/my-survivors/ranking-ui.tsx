@@ -119,7 +119,7 @@ export default function RankingUI({ initialRankings, groupId }: Props) {
         </span>
       </div>
       <p className="text-gray-500 text-sm mb-6">
-        Rank all 24 survivors in the order you want them drafted. Your top pick is #1.
+        Rank all {initialRankings.length} survivors in the order you want them drafted. Your top pick is #1.
         Click an unranked survivor to add them to your list, then use the arrows to reorder.
       </p>
 

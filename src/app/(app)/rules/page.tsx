@@ -1,10 +1,18 @@
-export default function RulesPage() {
+import { CURRENT_SEASON } from "@/lib/constants";
+import { getSurvivors } from "@/lib/survivor-actions";
+
+export default async function RulesPage() {
+  // Castaway count varies by season (50 had 24, 51 has 21), so read it rather
+  // than hardcoding a number that goes stale every year.
+  const castawayCount = (await getSurvivors(CURRENT_SEASON)).length;
+
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">How to Play</h1>
         <p className="text-gray-500 text-sm">
-          A fantasy draft game for Survivor Season 50 — 24 castaways, one winner.
+          A fantasy draft game for Survivor Season {CURRENT_SEASON} - {castawayCount}{" "}
+          castaways, one winner.
         </p>
       </div>
 
@@ -61,8 +69,9 @@ export default function RulesPage() {
         <ul className="space-y-2 text-sm text-gray-600">
           <li className="flex gap-2">
             <span className="text-gray-400 mt-0.5">&#8227;</span>
-            Before the draft, every player must rank <strong>all 24 castaways</strong> from most
-            wanted (#1) to least wanted (#24).
+            Before the draft, every player must rank{" "}
+            <strong>all {castawayCount} castaways</strong> from most wanted (#1) to least
+            wanted (#{castawayCount}).
           </li>
           <li className="flex gap-2">
             <span className="text-gray-400 mt-0.5">&#8227;</span>

@@ -9,6 +9,7 @@ import {
   SurvivorAuthStyles,
   SurvivorMobileHeader,
 } from "@/components/survivor-auth-panel";
+import { CURRENT_SEASON } from "@/lib/constants";
 
 function SignUpForm() {
   const router = useRouter();
@@ -145,7 +146,9 @@ export default function SignUpPage() {
           <div className="w-full max-w-sm">
             <SurvivorMobileHeader />
             <h2 className="text-2xl font-bold text-gray-900 mb-1">Create your account</h2>
-            <p className="text-sm text-gray-400 mb-6">Join the Survivor 50 fantasy draft.</p>
+            <p className="text-sm text-gray-400 mb-6">
+              Join the Survivor {CURRENT_SEASON} fantasy draft.
+            </p>
             <Suspense fallback={<div className="text-center text-gray-400 text-sm">Loading…</div>}>
               <SignUpForm />
             </Suspense>

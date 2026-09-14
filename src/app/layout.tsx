@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import { CURRENT_SEASON } from "@/lib/constants";
 
 const geist = Geist({
   variable: "--font-geist-sans",
@@ -8,8 +9,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Survivor 50 Draft",
-  description: "Fantasy draft game for Survivor Season 50",
+  title: `Survivor ${CURRENT_SEASON} Draft`,
+  description: `Fantasy draft game for Survivor Season ${CURRENT_SEASON}`,
 };
 
 export default function RootLayout({

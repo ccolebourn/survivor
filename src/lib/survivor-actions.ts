@@ -13,8 +13,9 @@ export interface DraftedSurvivor extends Survivor {
   is_free_agent_pick: boolean;
 }
 
-/** All survivors for a given season. */
-export async function getSurvivors(season = 50): Promise<Survivor[]> {
+/** All survivors for a given season. Season is required - there is no sensible
+ *  default now that more than one season lives in the database. */
+export async function getSurvivors(season: number): Promise<Survivor[]> {
   const { rows } = await pool.query<Survivor>(
     `SELECT * FROM survivors WHERE season = $1 ORDER BY name`,
     [season]
@@ -34,7 +35,7 @@ export async function getUserRankings(groupId: number): Promise<RankedSurvivor[]
        ON rs.survivor_id = s.id
        AND rs.group_id = $1
        AND rs.player_id = $2
-     WHERE s.season = 50
+     WHERE s.season = (SELECT season FROM groups WHERE id = $1)
      ORDER BY rs.rank ASC NULLS LAST, s.name ASC`,
     [groupId, session.user.id]
   );
