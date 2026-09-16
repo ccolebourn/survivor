@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lockfiles - bun.lock is the only one. A second lockfile makes the installed
+# dependency versions depend on which package manager happens to run, locally
+# and on Vercel. Use bun install, not npm install.
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
