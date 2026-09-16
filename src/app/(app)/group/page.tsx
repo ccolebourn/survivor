@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useGroup } from "@/lib/group-context";
 import {
   getGroupStatusData,
+  completeSeason,
   type GroupStatusData,
   type PlayerWithSurvivors,
   type PendingInvitation,
@@ -91,6 +92,67 @@ function RemoveButton({ onConfirm }: { onConfirm: () => Promise<void> }) {
       title="Remove from group"
     >
       Remove
+    </button>
+  );
+}
+
+/** Two-step end-of-season button. Ending a season is one-way in the UI, so it
+ *  asks before firing rather than acting on a single stray click. */
+function EndSeasonButton({
+  onEnd,
+  className = "",
+}: {
+  onEnd: () => Promise<void>;
+  className?: string;
+}) {
+  const [armed, setArmed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleConfirm() {
+    setLoading(true);
+    setError(null);
+    try {
+      await onEnd();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not end the season.");
+      setLoading(false);
+    }
+  }
+
+  if (armed) {
+    return (
+      <span className={`flex flex-col items-end gap-1 ${className}`}>
+        <span className="flex items-center gap-2">
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition"
+          >
+            {loading ? "Ending..." : "Confirm end"}
+          </button>
+          <button
+            onClick={() => {
+              setArmed(false);
+              setError(null);
+            }}
+            className="text-xs text-gray-400 hover:text-gray-600 transition"
+          >
+            Cancel
+          </button>
+        </span>
+        {error && <span className="text-xs text-red-600">{error}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setArmed(true)}
+      className={`text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition ${className}`}
+      title="Mark this season as finished"
+    >
+      End Season
     </button>
   );
 }
@@ -201,7 +263,7 @@ function PlayerCard({
 }
 
 export default function GroupPage() {
-  const { activeGroup } = useGroup();
+  const { groups, activeGroup, setGroups, setActiveGroup } = useGroup();
   const [state, setState] = useState<PageState>({ mode: "loading" });
   const [refreshKey, setRefreshKey] = useState(0);
   const [assignTarget, setAssignTarget] = useState<{ playerId: string; playerName: string } | null>(null);
@@ -431,6 +493,18 @@ export default function GroupPage() {
     setRefreshKey((k) => k + 1);
   }
 
+  async function handleEndSeason() {
+    if (!activeGroup) return;
+    await completeSeason(activeGroup.group_id);
+
+    // The context caches status, so the navbar and selector would keep saying
+    // "In Progress" until a reload without this.
+    const ended = { ...activeGroup, status: "complete" as const };
+    setActiveGroup(ended);
+    setGroups(groups.map((g) => (g.group_id === ended.group_id ? ended : g)));
+    setRefreshKey((k) => k + 1);
+  }
+
   const sortedPlayers = [...data.players].sort((a, b) => {
     if (a.is_eliminated === b.is_eliminated) {
       return a.player_name.localeCompare(b.player_name);
@@ -440,7 +514,15 @@ export default function GroupPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Group: {data.group_name}</h1>
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <h1 className="text-2xl font-bold">Group: {data.group_name}</h1>
+        {isAdmin && data.status === "in_progress" && (
+          <EndSeasonButton
+            onEnd={handleEndSeason}
+            className="shrink-0"
+          />
+        )}
+      </div>
 
       {isComplete && <WinnerBanner players={data.players} />}
 

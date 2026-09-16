@@ -169,6 +169,10 @@ export default function NavBar() {
                             </span>
                             <span className="flex items-center gap-1 shrink-0">
                               <span className="text-xs text-gray-400">
+                                S{g.season}
+                              </span>
+                              <span className="text-xs text-gray-300">|</span>
+                              <span className="text-xs text-gray-400">
                                 {STATUS_LABEL[g.status] ?? g.status}
                               </span>
                               {g.role === "admin" && (

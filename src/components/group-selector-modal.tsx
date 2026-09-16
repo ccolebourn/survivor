@@ -70,7 +70,12 @@ export default function GroupSelectorModal({ onClose }: Props) {
                       : "text-gray-800"
                   }`}
                 >
-                  <span className="font-medium">{g.group_name}</span>
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-medium truncate">{g.group_name}</span>
+                    {/* Groups from different seasons sit side by side here, and
+                        the name alone rarely says which is which. */}
+                    <span className="text-xs text-gray-400">Season {g.season}</span>
+                  </span>
                   <span className="text-xs text-gray-400 shrink-0">
                     {STATUS_LABEL[g.status] ?? g.status}
                     {g.role === "admin" && (

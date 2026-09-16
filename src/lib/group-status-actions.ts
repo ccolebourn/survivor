@@ -1,6 +1,8 @@
 "use server";
 
 import pool from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 import type { GroupStatus, MemberRole, Survivor } from "@/lib/types";
 
 export interface PlayerWithSurvivors {
@@ -164,4 +166,36 @@ export async function getGroupStatusData(groupId: number): Promise<GroupStatusDa
     pendingInvitations: inviteRows,
     undraftedSurvivors: undraftedRows,
   };
+}
+
+/**
+ * Marks a group's season as finished. Admin of *that* group only.
+ *
+ * `complete` is the final status in the enum but nothing else in the codebase
+ * writes it, so without this a finished season shows "In Progress" forever.
+ *
+ * Note this deliberately does not reuse admin-actions' requireAdmin(), which
+ * only checks whether the caller administers *some* group - that would let any
+ * group admin end another group's season.
+ */
+export async function completeSeason(groupId: number): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Not authenticated");
+
+  const { rows } = await pool.query(
+    `SELECT 1 FROM group_members
+     WHERE group_id = $1 AND user_id = $2 AND role = 'admin'`,
+    [groupId, session.user.id]
+  );
+  if (rows.length === 0) throw new Error("Only this group's admin can end the season.");
+
+  // Guarding on the current status keeps this idempotent and stops a group
+  // being "ended" before the draft has even run.
+  const result = await pool.query(
+    `UPDATE groups SET status = 'complete' WHERE id = $1 AND status = 'in_progress'`,
+    [groupId]
+  );
+  if (result.rowCount === 0) {
+    throw new Error("Only a season that is in progress can be ended.");
+  }
 }
