@@ -1,6 +1,8 @@
 import { betterAuth } from "better-auth";
 import { Pool } from "pg";
 import { processUserInvitations } from "@/lib/invite-utils";
+import { sendEmail, buildPasswordResetEmail } from "@/lib/email";
+import { CURRENT_SEASON } from "@/lib/constants";
 
 export const auth = betterAuth({
   database: new Pool({
@@ -8,6 +10,22 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    // Set explicitly rather than relying on the default so the "expires in one
+    // hour" line in the email cannot drift away from the real expiry.
+    resetPasswordTokenExpiresIn: 60 * 60,
+    // `url` already points at BetterAuth's /reset-password/:token callback,
+    // which validates the token and then forwards to the redirectTo the client
+    // supplied (/reset-password). Email it as-is; do not rebuild it.
+    sendResetPassword: async ({ user, url }) => {
+      await sendEmail({
+        to: user.email,
+        subject: `Reset your Survivor ${CURRENT_SEASON} draft password`,
+        htmlContent: buildPasswordResetEmail({
+          userName: user.name,
+          resetUrl: url,
+        }),
+      });
+    },
   },
   advanced: {
     database: {

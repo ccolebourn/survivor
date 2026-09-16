@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth"];
+// Password recovery must be reachable without a session - a reset page behind
+// the login wall is useless to someone who cannot log in.
+const PUBLIC_PATHS = [
+  "/login",
+  "/signup",
+  "/api/auth",
+  "/forgot-password",
+  "/reset-password",
+];
 
 // BetterAuth sets one of these depending on whether secure cookies are enabled
 const SESSION_COOKIES = [

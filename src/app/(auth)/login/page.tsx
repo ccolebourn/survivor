@@ -14,6 +14,8 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  // Set by /reset-password after a successful change.
+  const justReset = searchParams.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,6 +37,12 @@ function LoginForm() {
 
   return (
     <>
+      {justReset && !error && (
+        <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-3 text-sm">
+          Password updated. Sign in with your new password.
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
           {error}
@@ -58,9 +66,17 @@ function LoginForm() {
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-            Password
-          </label>
+          <div className="flex items-baseline justify-between mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-orange-500 hover:underline font-medium"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             type="password"

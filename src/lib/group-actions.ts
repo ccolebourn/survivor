@@ -4,7 +4,11 @@ import pool from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { sendEmail, buildInviteEmail } from "@/lib/email";
+import {
+  sendEmail,
+  buildInviteEmail,
+  buildAddedToGroupEmail,
+} from "@/lib/email";
 import type { GroupMembership } from "@/lib/types";
 import { CURRENT_SEASON } from "@/lib/constants";
 
@@ -25,18 +29,54 @@ export async function getUserGroups(): Promise<GroupMembership[]> {
   return rows;
 }
 
-/** Creates a new group and adds the creator as admin. Returns the new membership. */
-export async function createGroup(formData: FormData): Promise<GroupMembership> {
+export interface CreateGroupResult {
+  membership: GroupMembership;
+  /** How many members were carried over from the copied group. */
+  membersCopied: number;
+  /** One entry per member whose notification email failed. */
+  emailErrors: string[];
+}
+
+/**
+ * Creates a new group with the creator as admin.
+ *
+ * When copyFromGroupId is supplied, every other member of that group is added
+ * straight into the new one as a player and emailed. They are existing users,
+ * so there is nothing to accept - this is deliberately not the invitation flow.
+ */
+export async function createGroup(formData: FormData): Promise<CreateGroupResult> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
   const name = (formData.get("name") as string)?.trim();
   if (!name) throw new Error("Group name is required.");
 
+  const copyFromRaw = (formData.get("copyFromGroupId") as string | null)?.trim();
+  let copyFromGroupId: number | null = null;
+  if (copyFromRaw) {
+    copyFromGroupId = Number.parseInt(copyFromRaw, 10);
+    if (Number.isNaN(copyFromGroupId)) {
+      throw new Error("Invalid group to copy members from.");
+    }
+  }
+
   const client = await pool.connect();
   let groupId: number;
+  let copiedMembers: Array<{ email: string; name: string }> = [];
   try {
     await client.query("BEGIN");
+
+    // The source group id comes from the client, so membership must be checked.
+    // Without this anyone could harvest the roster of any group by id.
+    if (copyFromGroupId !== null) {
+      const { rows: allowed } = await client.query(
+        `SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2`,
+        [copyFromGroupId, session.user.id]
+      );
+      if (allowed.length === 0) {
+        throw new Error("You are not a member of the group you are copying from.");
+      }
+    }
 
     // Season is always CURRENT_SEASON. The groups.season default was dropped in
     // migration 006 so this has to be explicit; past seasons stay readable but
@@ -55,6 +95,27 @@ export async function createGroup(formData: FormData): Promise<GroupMembership> 
       [groupId, session.user.id]
     );
 
+    if (copyFromGroupId !== null) {
+      // Everyone except the creator, who is already in as admin above.
+      const { rows: inserted } = await client.query<{ user_id: string }>(
+        `INSERT INTO group_members (group_id, user_id, role)
+         SELECT $1, gm.user_id, 'player'
+         FROM group_members gm
+         WHERE gm.group_id = $2 AND gm.user_id <> $3
+         ON CONFLICT (group_id, user_id) DO NOTHING
+         RETURNING user_id`,
+        [groupId, copyFromGroupId, session.user.id]
+      );
+
+      if (inserted.length > 0) {
+        const { rows: people } = await client.query<{ email: string; name: string }>(
+          `SELECT email, name FROM "user" WHERE id = ANY($1::text[])`,
+          [inserted.map((r) => r.user_id)]
+        );
+        copiedMembers = people;
+      }
+    }
+
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -63,12 +124,39 @@ export async function createGroup(formData: FormData): Promise<GroupMembership> 
     client.release();
   }
 
+  // Emails go out only after the transaction commits. Sending inside it would
+  // hold the connection open on a network call, and a Brevo failure would roll
+  // back a group that was otherwise created correctly.
+  const emailErrors: string[] = [];
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  for (const member of copiedMembers) {
+    try {
+      await sendEmail({
+        to: member.email,
+        subject: `You're in "${name}" for Survivor ${CURRENT_SEASON}`,
+        htmlContent: buildAddedToGroupEmail({
+          groupName: name,
+          adminName: session.user.name,
+          appUrl,
+        }),
+      });
+    } catch (err) {
+      emailErrors.push(
+        `${member.email}: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    }
+  }
+
   return {
-    group_id: groupId!,
-    group_name: name,
-    role: "admin",
-    status: "signup",
-    season: CURRENT_SEASON,
+    membership: {
+      group_id: groupId!,
+      group_name: name,
+      role: "admin",
+      status: "signup",
+      season: CURRENT_SEASON,
+    },
+    membersCopied: copiedMembers.length,
+    emailErrors,
   };
 }
 

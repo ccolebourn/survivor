@@ -17,10 +17,23 @@ export default function NewGroupPage() {
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     try {
-      const newGroup = await createGroup(formData);
+      const result = await createGroup(formData);
       // Update the context immediately so the navbar reflects the new group
-      setGroups([...groups, newGroup]);
-      setActiveGroup(newGroup);
+      setGroups([...groups, result.membership]);
+      setActiveGroup(result.membership);
+
+      // The group exists either way, so a failed notification must not read as
+      // a failed creation. Surface it and let the admin re-invite by email.
+      if (result.emailErrors.length > 0) {
+        setError(
+          `Group created and ${result.membersCopied} member(s) added, but ` +
+            `${result.emailErrors.length} notification email(s) failed: ` +
+            result.emailErrors.join("; ")
+        );
+        setLoading(false);
+        return;
+      }
+
       router.push("/my-survivors");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -55,6 +68,34 @@ export default function NewGroupPage() {
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+
+        {groups.length > 0 && (
+          <div>
+            <label
+              htmlFor="copyFromGroupId"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Copy members from
+            </label>
+            <select
+              id="copyFromGroupId"
+              name="copyFromGroupId"
+              defaultValue=""
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Nobody - I&apos;ll invite people myself</option>
+              {groups.map((g) => (
+                <option key={g.group_id} value={g.group_id}>
+                  {g.group_name} (Season {g.season})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              Everyone from that group joins straight away and gets an email.
+              There is nothing for them to accept.
+            </p>
+          </div>
+        )}
 
         <button
           type="submit"
