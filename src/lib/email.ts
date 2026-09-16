@@ -75,11 +75,14 @@ export function buildAddedToGroupEmail(params: {
   groupName: string;
   adminName: string;
   appUrl: string;
+  /** The group's own season, not CURRENT_SEASON - this email can be re-sent for
+   *  a past season's group, which must not claim to be the current one. */
+  season: number;
 }): string {
-  const { groupName, adminName, appUrl } = params;
+  const { groupName, adminName, appUrl, season } = params;
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color: #1d4ed8;">You're in for Survivor ${CURRENT_SEASON}!</h2>
+      <h2 style="color: #1d4ed8;">You're in for Survivor ${season}!</h2>
       <p><strong>${adminName}</strong> has added you to <strong>${groupName}</strong>.</p>
       <p>You don't need to accept anything - you're already a member. Sign in and
          rank the castaways before the draft.</p>

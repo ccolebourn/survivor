@@ -138,6 +138,7 @@ export async function createGroup(formData: FormData): Promise<CreateGroupResult
           groupName: name,
           adminName: session.user.name,
           appUrl,
+          season: CURRENT_SEASON,
         }),
       });
     } catch (err) {
@@ -387,4 +388,73 @@ export async function acceptInvite(token: string): Promise<{ groupId: number; gr
   );
 
   return { groupId: invite.group_id, groupName: groupRows[0]?.name ?? "the group" };
+}
+
+/**
+ * Re-sends the "you're in this group" email to every member except the caller.
+ *
+ * createGroup only notifies once, so a batch that fails - a bounced address, a
+ * lapsed API key - leaves members in the group with no way to tell them short
+ * of recreating it. This is the recovery path, and it also covers members added
+ * after the group was created.
+ *
+ * Admin of *this* group only, and the season comes from the group rather than
+ * CURRENT_SEASON so re-notifying a past season says the right thing.
+ */
+export async function notifyGroupMembers(
+  groupId: number
+): Promise<{ sent: number; errors: string[] }> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Not authenticated");
+
+  const { rows: allowed } = await pool.query(
+    `SELECT 1 FROM group_members
+     WHERE group_id = $1 AND user_id = $2 AND role = 'admin'`,
+    [groupId, session.user.id]
+  );
+  if (allowed.length === 0) {
+    throw new Error("Only this group's admin can notify members.");
+  }
+
+  const { rows: groupRows } = await pool.query<{ name: string; season: number }>(
+    `SELECT name, season FROM groups WHERE id = $1`,
+    [groupId]
+  );
+  if (groupRows.length === 0) throw new Error("Group not found.");
+  const { name: groupName, season } = groupRows[0];
+
+  const { rows: members } = await pool.query<{ email: string }>(
+    `SELECT u.email
+     FROM group_members gm
+     JOIN "user" u ON u.id = gm.user_id
+     WHERE gm.group_id = $1 AND gm.user_id <> $2
+     ORDER BY u.name`,
+    [groupId, session.user.id]
+  );
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  let sent = 0;
+  const errors: string[] = [];
+
+  for (const member of members) {
+    try {
+      await sendEmail({
+        to: member.email,
+        subject: `You're in "${groupName}" for Survivor ${season}`,
+        htmlContent: buildAddedToGroupEmail({
+          groupName,
+          adminName: session.user.name,
+          appUrl,
+          season,
+        }),
+      });
+      sent++;
+    } catch (err) {
+      errors.push(
+        `${member.email}: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    }
+  }
+
+  return { sent, errors };
 }
